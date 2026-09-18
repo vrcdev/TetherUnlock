@@ -32,12 +32,45 @@ static void dump(xpc_object_t o, const char *tag) {
     free(d);
 }
 
+static void set_param(xpc_object_t m, char *arg) {
+    char *eq = strchr(arg, '=');
+    if (!eq) return;
+    *eq = 0;
+    char *v = eq + 1, *end;
+    long long n = strtoll(v, &end, 0);
+    if (*v && !*end) {
+        xpc_dictionary_set_int64(m, arg, n);
+    } else if (!strcmp(v, "true")) {
+        xpc_dictionary_set_bool(m, arg, true);
+    } else {
+        xpc_dictionary_set_string(m, arg, v);
+    }
+}
+
+static int send_cmd(xpc_connection_t c, uint64_t cmd, int nparams, char **params) {
+    xpc_object_t m = xpc_dictionary_create(NULL, NULL, 0);
+    xpc_dictionary_set_uint64(m, "xpcKey", cmd);
+    for (int i = 0; i < nparams; i++)
+        set_param(m, params[i]);
+
+    __block int got = 0;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    xpc_connection_send_message_with_reply(c, m, NULL, ^(xpc_object_t r) {
+        dump(r, "reply");
+        got = 1;
+        dispatch_semaphore_signal(sem);
+    });
+    dispatch_time_t t = dispatch_time(DISPATCH_TIME_NOW, 6LL * NSEC_PER_SEC);
+    if (dispatch_semaphore_wait(sem, t) != 0)
+        fprintf(stderr, "timeout (cmd %llu)\n", cmd);
+    return got;
+}
+
+/* usage: tetherctl <cmd> [k=v ...]            — single command
+   or:    tetherctl seq <cmd1> <cmd2> ...      — commands on one connection */
 int main(int argc, char **argv) {
     @autoreleasepool {
-        uint64_t cmd = argc > 1 ? strtoull(argv[1], NULL, 0) : 1000;
-
-        dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-        __block int got_reply = 0;
+        int seq = argc > 1 && !strcmp(argv[1], "seq");
 
         xpc_connection_t c = xpc_connection_create_mach_service(
             "com.apple.MobileInternetSharing", NULL, 0);
@@ -49,35 +82,19 @@ int main(int argc, char **argv) {
             }
         });
         xpc_connection_resume(c);
+        usleep(200000);
 
-        xpc_object_t m = xpc_dictionary_create(NULL, NULL, 0);
-        xpc_dictionary_set_uint64(m, "xpcKey", cmd);
-
-        /* extra args: key=value (int, bool, or string) */
-        for (int i = 2; i < argc; i++) {
-            char *eq = strchr(argv[i], '=');
-            if (!eq) continue;
-            *eq = 0;
-            char *v = eq + 1, *end;
-            long long n = strtoll(v, &end, 0);
-            if (*v && !*end) {
-                xpc_dictionary_set_int64(m, argv[i], n);
-            } else if (strcmp(v, "true") == 0) {
-                xpc_dictionary_set_bool(m, argv[i], true);
-            } else {
-                xpc_dictionary_set_string(m, argv[i], v);
+        if (seq) {
+            for (int i = 2; i < argc; i++) {
+                uint64_t cmd = strtoull(argv[i], NULL, 0);
+                fprintf(stderr, ">>> cmd %llu\n", cmd);
+                send_cmd(c, cmd, 0, NULL);
             }
+        } else {
+            uint64_t cmd = argc > 1 ? strtoull(argv[1], NULL, 0) : 1000;
+            send_cmd(c, cmd, argc - 2, argv + 2);
         }
-
-        xpc_connection_send_message_with_reply(c, m, NULL, ^(xpc_object_t r) {
-            dump(r, "reply");
-            got_reply = 1;
-            dispatch_semaphore_signal(sem);
-        });
-
-        dispatch_time_t t = dispatch_time(DISPATCH_TIME_NOW, 8LL * NSEC_PER_SEC);
-        if (dispatch_semaphore_wait(sem, t) != 0)
-            fprintf(stderr, "timeout waiting for reply (sent cmd %llu)\n", cmd);
-        return got_reply ? 0 : 2;
+        usleep(500000);
+        return 0;
     }
 }

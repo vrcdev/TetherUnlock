@@ -1,6 +1,6 @@
 Package: com.vrcdev.tetherunlock
 Name: TetherUnlock
-Version: 0.6.1
+Version: 0.6.2
 Architecture: iphoneos-arm64
 Description: Forces iOS tethering entitlement checks to allow — Personal Hotspot/USB tether without carrier provisioning (hooks misd)
 Maintainer: vrcdev
