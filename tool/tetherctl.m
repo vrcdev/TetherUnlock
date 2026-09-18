@@ -103,17 +103,17 @@ int main(int argc, char **argv) {
             xpc_dictionary_set_uint64(m, "xpcKey", 1000);
             xpc_dictionary_set_connection(m, "clientCommunication", comm);
 
-            __block char clientid[256] = {0};
+            __block char *clientid = NULL;
             dispatch_semaphore_t sem = dispatch_semaphore_create(0);
             xpc_connection_send_message_with_reply(c, m, NULL, ^(xpc_object_t r) {
                 dump(r, "reply");
                 const char *cid = xpc_dictionary_get_string(r, "clientid");
-                if (cid) strncpy(clientid, cid, sizeof(clientid) - 1);
+                if (cid) clientid = strdup(cid);
                 dispatch_semaphore_signal(sem);
             });
             dispatch_time_t t = dispatch_time(DISPATCH_TIME_NOW, 6LL * NSEC_PER_SEC);
             dispatch_semaphore_wait(sem, t);
-            fprintf(stderr, "clientid = %s\n", clientid[0] ? clientid : "(none)");
+            fprintf(stderr, "clientid = %s\n", clientid ? clientid : "(none)");
 
             /* remaining args = follow-up commands, sent with the clientid */
             for (int i = 2; i < argc; i++) {
@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
                 fprintf(stderr, ">>> cmd %llu (clientid)\n", cmd);
                 xpc_object_t f = xpc_dictionary_create(NULL, NULL, 0);
                 xpc_dictionary_set_uint64(f, "xpcKey", cmd);
-                if (clientid[0])
+                if (clientid)
                     xpc_dictionary_set_string(f, "clientid", clientid);
                 /* optional k=v after the command, until the next bare number */
                 while (i + 1 < argc && strchr(argv[i + 1], '='))
