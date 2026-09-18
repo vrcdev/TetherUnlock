@@ -239,6 +239,31 @@ static xpc_connection_t hook_xdg_conn(xpc_object_t d, const char *k) {
     return r;
 }
 
+/* --- write side: what misd puts into replies/notifications --- */
+static void (*orig_xds_u64)(xpc_object_t, const char *, uint64_t);
+static void hook_xds_u64(xpc_object_t d, const char *k, uint64_t v) {
+    tu_log("xpc_SET_uint64(\"%s\") = %llu", k ? k : "?", v);
+    orig_xds_u64(d, k, v);
+}
+
+static void (*orig_xds_str)(xpc_object_t, const char *, const char *);
+static void hook_xds_str(xpc_object_t d, const char *k, const char *v) {
+    tu_log("xpc_SET_string(\"%s\") = %s", k ? k : "?", v ? v : "(null)");
+    orig_xds_str(d, k, v);
+}
+
+static void (*orig_xds_bool)(xpc_object_t, const char *, _Bool);
+static void hook_xds_bool(xpc_object_t d, const char *k, _Bool v) {
+    tu_log("xpc_SET_bool(\"%s\") = %d", k ? k : "?", v);
+    orig_xds_bool(d, k, v);
+}
+
+static void (*orig_xds_val)(xpc_object_t, const char *, xpc_object_t);
+static void hook_xds_val(xpc_object_t d, const char *k, xpc_object_t v) {
+    tu_log("xpc_SET_value(\"%s\") = %p", k ? k : "?", v);
+    orig_xds_val(d, k, v);
+}
+
 static void hook_xpc_getters(void) {
     void *lib = dlopen("/usr/lib/system/libxpc.dylib", RTLD_NOW);
     if (!lib) lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_NOW);
@@ -254,8 +279,12 @@ static void hook_xpc_getters(void) {
         { "xpc_dictionary_get_array",  (void *)hook_xdg_arr, (void **)&orig_xdg_arr },
         { "xpc_dictionary_get_double", (void *)hook_xdg_dbl, (void **)&orig_xdg_dbl },
         { "xpc_dictionary_get_connection", (void *)hook_xdg_conn, (void **)&orig_xdg_conn },
+        { "xpc_dictionary_set_uint64", (void *)hook_xds_u64, (void **)&orig_xds_u64 },
+        { "xpc_dictionary_set_string", (void *)hook_xds_str, (void **)&orig_xds_str },
+        { "xpc_dictionary_set_bool",   (void *)hook_xds_bool,(void **)&orig_xds_bool },
+        { "xpc_dictionary_set_value",  (void *)hook_xds_val, (void **)&orig_xds_val },
     };
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < 15; i++) {
         void *sym = lib ? dlsym(lib, hooks[i].n) : NULL;
         if (!sym) sym = dlsym(RTLD_DEFAULT, hooks[i].n);
         if (sym) {
