@@ -20,7 +20,7 @@ void xpc_dictionary_set_int64(xpc_object_t, const char *, int64_t);
 void xpc_dictionary_set_bool(xpc_object_t, const char *, bool);
 void xpc_dictionary_set_string(xpc_object_t, const char *, const char *);
 void xpc_dictionary_set_connection(xpc_object_t, const char *, xpc_connection_t);
-void xpc_dictionary_set_dictionary(xpc_object_t, const char *, xpc_object_t);
+void xpc_dictionary_set_value(xpc_object_t, const char *, xpc_object_t);
 const char *xpc_dictionary_get_string(xpc_object_t, const char *);
 xpc_type_t xpc_get_type(xpc_object_t);
 char *xpc_copy_description(xpc_object_t);
@@ -135,7 +135,7 @@ int main(int argc, char **argv) {
                     if (!strncmp(a, "ip.", 3)) {
                         if (!ip) {
                             ip = xpc_dictionary_create(NULL, NULL, 0);
-                            xpc_dictionary_set_dictionary(f, "interfaceParam", ip);
+                            xpc_dictionary_set_value(f, "interfaceParam", ip);
                         }
                         set_param(ip, a + 3);
                     } else {
