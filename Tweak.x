@@ -1,12 +1,15 @@
 #import <Foundation/Foundation.h>
 #import <CoreFoundation/CoreFoundation.h>
 #import <substrate.h>
+#import <mach-o/dyld.h>
 #import <stdarg.h>
 #import <stdio.h>
 #import <stdlib.h>
 #import <unistd.h>
 #import <sys/stat.h>
 #import <pthread.h>
+#import <ifaddrs.h>
+#import <net/if.h>
 
 static void tu_log(const char *fmt, ...) {
     va_list ap; va_start(ap, fmt);
@@ -24,12 +27,23 @@ static void force_status(void *status, const char *tag) {
     *(int *)(b + 4) = 5;
 }
 
+static void log_ifaddrs(const char *tag) {
+    struct ifaddrs *ifa = NULL;
+    if (getifaddrs(&ifa) != 0 || !ifa) { tu_log("%s: getifaddrs failed", tag); return; }
+    char line[1024] = {0}; size_t off = 0;
+    for (struct ifaddrs *p = ifa; p && off < sizeof(line) - 24; p = p->ifa_next) {
+        int n = snprintf(line + off, sizeof(line) - off, "%s ", p->ifa_name);
+        if (n > 0) off += (size_t)n;
+    }
+    freeifaddrs(ifa);
+    tu_log("%s: ifaces: %s", tag, line);
+}
+
 static id g_inst;   /* captured misCTClientSharedInstance */
 static int g_fired; /* activation already fired */
 
 @interface TUCTClient : NSObject
 - (void)activateTethering:(long)active;
-- (void)setTetheringActive:(id)active;
 @end
 
 %hook misCTClientSharedInstance
@@ -75,39 +89,32 @@ static int g_fired; /* activation already fired */
     %orig;
 }
 
-- (void)setTetheringActive:(long)active {
-    g_inst = self;
-    tu_log("setTetheringActive(%ld)", active);
-    %orig;
-}
-
 %end
 
-/* trigger: /var/mobile/tether_on exists -> force activation from inside misd */
+/* misd's internal setTetheringActive IMP — file offset 0x1c128.
+   Signature: int fn(id self, SEL _cmd, BOOL active)
+   Requires ivar+8 (CTServerConnection) to be non-NULL. */
+static int call_setTetheringActive(id inst, BOOL active) {
+    intptr_t slide = _dyld_get_image_vmaddr_slide(0);
+    int (*imp)(id, SEL, BOOL) = (void *)(slide + 0x1c128);
+    return imp(inst, NULL, active);
+}
+
+/* trigger: /var/mobile/tether_on exists -> call the real activation IMP */
 static void *trigger_thread(void *arg) {
+    log_ifaddrs("startup");
     for (;;) {
         struct stat st;
         if (stat("/var/mobile/tether_on", &st) == 0) {
             if (!g_fired) {
                 g_fired = 1;
                 if (g_inst) {
-                    tu_log("trigger: probing setTetheringActive arg types");
+                    tu_log("trigger: calling setTetheringActive IMP(%p, YES)", g_inst);
                     @autoreleasepool {
-                        id cands[] = { @YES, @(1), @"kCTDCSActive",
-                                       @"kCTDCSActivating", @"active", nil };
-                        const char *names[] = { "@YES", "@1", "@kCTDCSActive",
-                                                "@kCTDCSActivating", "@active", "nil" };
-                        for (int i = 0; i < 6; i++) {
-                            @try {
-                                [(TUCTClient *)g_inst setTetheringActive:cands[i]];
-                                tu_log("setTetheringActive(%s) ran", names[i]);
-                            } @catch (id e) {
-                                tu_log("setTetheringActive(%s) threw", names[i]);
-                            }
-                        }
-                        @try {
-                            [(TUCTClient *)g_inst activateTethering:1];
-                        } @catch (id e) { tu_log("activateTethering threw"); }
+                        int r = call_setTetheringActive(g_inst, YES);
+                        tu_log("setTetheringActive IMP returned %d", r);
+                        usleep(500000);
+                        log_ifaddrs("after-active");
                     }
                 } else {
                     tu_log("trigger: no instance captured yet");
@@ -122,19 +129,8 @@ static void *trigger_thread(void *arg) {
     return NULL;
 }
 
-/* fake the CommCenter tethering assertion — misd treats NULL as denial */
-static CFTypeRef fakeAssertion;
-static CFTypeRef hook_assertion(void) {
-    if (!fakeAssertion)
-        fakeAssertion = CFStringCreateCopy(kCFAllocatorDefault, CFSTR("tetherunlock"));
-    tu_log("TetheringAssertionCreate -> fake");
-    return fakeAssertion;
-}
-
 %ctor {
     tu_log("=== TetherUnlock injected into %s ===", getprogname());
-    MSHookFunction((void *)"_CTServerConnectionTetheringAssertionCreate",
-                   (void *)hook_assertion, NULL);
     %init;
     pthread_t t;
     if (pthread_create(&t, NULL, trigger_thread, NULL) == 0)
