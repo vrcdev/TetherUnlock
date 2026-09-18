@@ -35,6 +35,14 @@ jobs:
           ldid -Stool/entitlements.plist layout/usr/bin/tetherctl
           ldid -e layout/usr/bin/tetherctl | head -20
 
+      - name: Build usbeth tool
+        run: |
+          SDK="$THEOS/sdks/iPhoneOS16.5.sdk"
+          xcrun clang -arch arm64 -isysroot "$SDK" \
+            -target arm64-apple-ios15.0 -O2 \
+            tool/usbeth.c -o layout/usr/bin/usbeth
+          ldid -Stool/entitlements.plist layout/usr/bin/usbeth
+
       - name: Build rootless package
         run: make package FINALPACKAGE=1
 
