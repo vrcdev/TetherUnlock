@@ -9,7 +9,9 @@
 #include <string.h>
 #include <mach/mach.h>
 #include <mach/message.h>
-#include <servers/bootstrap.h>
+
+/* trimmed SDK lacks servers/bootstrap.h */
+kern_return_t bootstrap_look_up(mach_port_t, const char *, mach_port_t *);
 
 /* NDR_record_t + NDR_record come from mach/ndr.h via mach/mach.h */
 
