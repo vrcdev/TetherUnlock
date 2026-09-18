@@ -1,5 +1,25 @@
 #import <Foundation/Foundation.h>
+#if __has_include(<xpc/xpc.h>)
 #include <xpc/xpc.h>
+#else
+/* trimmed SDK: declare the stable XPC C API */
+typedef void *xpc_object_t;
+typedef void *xpc_connection_t;
+typedef void *xpc_type_t;
+typedef void (^xpc_handler_t)(xpc_object_t);
+extern const xpc_type_t XPC_TYPE_DICTIONARY;
+xpc_connection_t xpc_connection_create_mach_service(const char *, dispatch_queue_t, uint64_t);
+void xpc_connection_set_event_handler(xpc_connection_t, xpc_handler_t);
+void xpc_connection_resume(xpc_connection_t);
+void xpc_connection_send_message_with_reply(xpc_connection_t, xpc_object_t, dispatch_queue_t, xpc_handler_t);
+xpc_object_t xpc_dictionary_create(const char *const *, const xpc_object_t *, size_t);
+void xpc_dictionary_set_uint64(xpc_object_t, const char *, uint64_t);
+void xpc_dictionary_set_int64(xpc_object_t, const char *, int64_t);
+void xpc_dictionary_set_bool(xpc_object_t, const char *, bool);
+void xpc_dictionary_set_string(xpc_object_t, const char *, const char *);
+xpc_type_t xpc_get_type(xpc_object_t);
+char *xpc_copy_description(xpc_object_t);
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
