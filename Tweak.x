@@ -65,11 +65,11 @@ static CFTypeRef hook_assertion(void) {
     return fakeAssertion;
 }
 
-extern CFTypeRef _CTServerConnectionTetheringAssertionCreate();
-
 %ctor {
     tu_log("=== TetherUnlock injected into %s ===", getprogname());
-    MSHookFunction((void *)_CTServerConnectionTetheringAssertionCreate,
-                   (void *)hook_assertion, NULL);
+    void *sym = MSFindSymbol(NULL, "_CTServerConnectionTetheringAssertionCreate");
+    tu_log("assertion symbol @ %p", sym);
+    if (sym)
+        MSHookFunction(sym, (void *)hook_assertion, NULL);
     %init;
 }
