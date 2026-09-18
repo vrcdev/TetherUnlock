@@ -7,7 +7,8 @@ typedef void *xpc_object_t;
 typedef void *xpc_connection_t;
 typedef void *xpc_type_t;
 typedef void (^xpc_handler_t)(xpc_object_t);
-extern const xpc_type_t XPC_TYPE_DICTIONARY;
+extern const xpc_type_t _xpc_type_dictionary;
+#define XPC_TYPE_DICTIONARY _xpc_type_dictionary
 xpc_connection_t xpc_connection_create_mach_service(const char *, dispatch_queue_t, uint64_t);
 void xpc_connection_set_event_handler(xpc_connection_t, xpc_handler_t);
 void xpc_connection_resume(xpc_connection_t);
