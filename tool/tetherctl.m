@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
                 usleep(300000);
             }
             fprintf(stderr, "link up, listening for pushes...\n");
-            sleep(8);
+            for (;;) sleep(60);   /* stay alive: client teardown stops the svc */
             return 0;
         }
 
