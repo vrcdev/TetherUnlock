@@ -20,6 +20,7 @@ void xpc_dictionary_set_int64(xpc_object_t, const char *, int64_t);
 void xpc_dictionary_set_bool(xpc_object_t, const char *, bool);
 void xpc_dictionary_set_string(xpc_object_t, const char *, const char *);
 void xpc_dictionary_set_connection(xpc_object_t, const char *, xpc_connection_t);
+void xpc_dictionary_set_dictionary(xpc_object_t, const char *, xpc_object_t);
 const char *xpc_dictionary_get_string(xpc_object_t, const char *);
 xpc_type_t xpc_get_type(xpc_object_t);
 char *xpc_copy_description(xpc_object_t);
@@ -49,6 +50,8 @@ static void set_param(xpc_object_t m, char *arg) {
         xpc_dictionary_set_string(m, arg, v);
     }
 }
+
+/* "ip.<key>=<v>" sets <key> inside the interfaceParam sub-dictionary */
 
 static int send_cmd(xpc_connection_t c, uint64_t cmd, int nparams, char **params) {
     xpc_object_t m = xpc_dictionary_create(NULL, NULL, 0);
@@ -124,9 +127,21 @@ int main(int argc, char **argv) {
                 xpc_dictionary_set_uint64(f, "xpcKey", cmd);
                 if (clientid)
                     xpc_dictionary_set_string(f, "clientid", clientid);
-                /* optional k=v after the command, until the next bare number */
-                while (i + 1 < argc && strchr(argv[i + 1], '='))
-                    set_param(f, argv[++i]);
+                /* optional k=v after the command, until the next bare number;
+                   ip.<k>=<v> goes into the interfaceParam sub-dict */
+                xpc_object_t ip = NULL;
+                while (i + 1 < argc && strchr(argv[i + 1], '=')) {
+                    char *a = argv[++i];
+                    if (!strncmp(a, "ip.", 3)) {
+                        if (!ip) {
+                            ip = xpc_dictionary_create(NULL, NULL, 0);
+                            xpc_dictionary_set_dictionary(f, "interfaceParam", ip);
+                        }
+                        set_param(ip, a + 3);
+                    } else {
+                        set_param(f, a);
+                    }
+                }
                 xpc_connection_send_message_with_reply(c, f, NULL, ^(xpc_object_t r) {
                     dump(r, "reply");
                 });
