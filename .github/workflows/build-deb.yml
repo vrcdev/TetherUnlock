@@ -24,6 +24,17 @@ jobs:
           rm -rf "$THEOS/sdks"
           git clone --depth 1 https://github.com/theos/sdks.git "$THEOS/sdks"
 
+      - name: Build tetherctl tool
+        run: |
+          mkdir -p layout/var/jb/usr/bin
+          SDK="$THEOS/sdks/iPhoneOS16.5.sdk"
+          xcrun clang -arch arm64 -isysroot "$SDK" \
+            -target arm64-apple-ios15.0 -O2 \
+            -framework Foundation \
+            tool/tetherctl.m -o layout/var/jb/usr/bin/tetherctl
+          ldid -Stool/entitlements.plist layout/var/jb/usr/bin/tetherctl
+          ldid -e layout/var/jb/usr/bin/tetherctl | head -20
+
       - name: Build rootless package
         run: make package FINALPACKAGE=1
 
