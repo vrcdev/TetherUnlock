@@ -203,6 +203,41 @@ static xpc_object_t hook_xdg_val(xpc_object_t d, const char *k) {
     return r;
 }
 
+static void (*orig_xdg_uuid)(xpc_object_t, const char *, unsigned char *);
+static void hook_xdg_uuid(xpc_object_t d, const char *k, unsigned char *out) {
+    orig_xdg_uuid(d, k, out);
+    tu_log("xpc_get_uuid(\"%s\") = %02x%02x%02x%02x...", k ? k : "?",
+           out[0], out[1], out[2], out[3]);
+}
+
+static const void *(*orig_xdg_data)(xpc_object_t, const char *, size_t *);
+static const void *hook_xdg_data(xpc_object_t d, const char *k, size_t *len) {
+    const void *r = orig_xdg_data(d, k, len);
+    tu_log("xpc_get_data(\"%s\") = %p len=%zu", k ? k : "?", r, len ? *len : 0);
+    return r;
+}
+
+static xpc_object_t (*orig_xdg_arr)(xpc_object_t, const char *);
+static xpc_object_t hook_xdg_arr(xpc_object_t d, const char *k) {
+    xpc_object_t r = orig_xdg_arr(d, k);
+    tu_log("xpc_get_array(\"%s\") = %p", k ? k : "?", r);
+    return r;
+}
+
+static double (*orig_xdg_dbl)(xpc_object_t, const char *, double);
+static double hook_xdg_dbl(xpc_object_t d, const char *k, double def) {
+    double r = orig_xdg_dbl(d, k, def);
+    tu_log("xpc_get_double(\"%s\") = %f", k ? k : "?", r);
+    return r;
+}
+
+static xpc_connection_t (*orig_xdg_conn)(xpc_object_t, const char *);
+static xpc_connection_t hook_xdg_conn(xpc_object_t d, const char *k) {
+    xpc_connection_t r = orig_xdg_conn(d, k);
+    tu_log("xpc_get_connection(\"%s\") = %p", k ? k : "?", r);
+    return r;
+}
+
 static void hook_xpc_getters(void) {
     void *lib = dlopen("/usr/lib/system/libxpc.dylib", RTLD_NOW);
     if (!lib) lib = dlopen("/usr/lib/system/libsystem_kernel.dylib", RTLD_NOW);
@@ -213,8 +248,13 @@ static void hook_xpc_getters(void) {
         { "xpc_dictionary_get_bool",   (void *)hook_xdg_bool,(void **)&orig_xdg_bool },
         { "xpc_dictionary_get_dictionary", (void *)hook_xdg_dict, (void **)&orig_xdg_dict },
         { "xpc_dictionary_get_value",  (void *)hook_xdg_val, (void **)&orig_xdg_val },
+        { "xpc_dictionary_get_uuid",   (void *)hook_xdg_uuid,(void **)&orig_xdg_uuid },
+        { "xpc_dictionary_get_data",   (void *)hook_xdg_data,(void **)&orig_xdg_data },
+        { "xpc_dictionary_get_array",  (void *)hook_xdg_arr, (void **)&orig_xdg_arr },
+        { "xpc_dictionary_get_double", (void *)hook_xdg_dbl, (void **)&orig_xdg_dbl },
+        { "xpc_dictionary_get_connection", (void *)hook_xdg_conn, (void **)&orig_xdg_conn },
     };
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 11; i++) {
         void *sym = lib ? dlsym(lib, hooks[i].n) : NULL;
         if (!sym) sym = dlsym(RTLD_DEFAULT, hooks[i].n);
         if (sym) {
