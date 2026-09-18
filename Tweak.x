@@ -95,9 +95,17 @@ static int g_fired; /* activation already fired */
    Signature: int fn(id self, SEL _cmd, BOOL active)
    Requires ivar+8 (CTServerConnection) to be non-NULL. */
 static int call_setTetheringActive(id inst, BOOL active) {
-    MSImageRef img = MSGetImageByName("/usr/libexec/misd");
-    if (!img || !img->imageHeader) { tu_log("MSGetImageByName(misd) failed"); return -1; }
-    int (*imp)(id, SEL, BOOL) = (void *)((const char *)img->imageHeader + 0x1c128);
+    const char *hdr = NULL;
+    uint32_t n = _dyld_image_count();
+    for (uint32_t i = 0; i < n; i++) {
+        const char *name = _dyld_get_image_name(i);
+        if (name && strcmp(name, "/usr/libexec/misd") == 0) {
+            hdr = (const char *)_dyld_get_image_header(i);
+            break;
+        }
+    }
+    if (!hdr) { tu_log("misd image not found in %u images", n); return -1; }
+    int (*imp)(id, SEL, BOOL) = (void *)(hdr + 0x1c128);
     return imp(inst, NULL, active);
 }
 
