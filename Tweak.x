@@ -29,7 +29,7 @@ static int g_fired; /* activation already fired */
 
 @interface TUCTClient : NSObject
 - (void)activateTethering:(long)active;
-- (void)setTetheringActive:(long)active;
+- (void)setTetheringActive:(id)active;
 @end
 
 %hook misCTClientSharedInstance
@@ -91,11 +91,20 @@ static void *trigger_thread(void *arg) {
             if (!g_fired) {
                 g_fired = 1;
                 if (g_inst) {
-                    tu_log("trigger: forcing setTetheringActive(1) + activateTethering(1)");
+                    tu_log("trigger: probing setTetheringActive arg types");
                     @autoreleasepool {
-                        @try {
-                            [(TUCTClient *)g_inst setTetheringActive:1];
-                        } @catch (id e) { tu_log("setTetheringActive threw"); }
+                        id cands[] = { @YES, @(1), @"kCTDCSActive",
+                                       @"kCTDCSActivating", @"active", nil };
+                        const char *names[] = { "@YES", "@1", "@kCTDCSActive",
+                                                "@kCTDCSActivating", "@active", "nil" };
+                        for (int i = 0; i < 6; i++) {
+                            @try {
+                                [(TUCTClient *)g_inst setTetheringActive:cands[i]];
+                                tu_log("setTetheringActive(%s) ran", names[i]);
+                            } @catch (id e) {
+                                tu_log("setTetheringActive(%s) threw", names[i]);
+                            }
+                        }
                         @try {
                             [(TUCTClient *)g_inst activateTethering:1];
                         } @catch (id e) { tu_log("activateTethering threw"); }
