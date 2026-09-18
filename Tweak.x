@@ -21,6 +21,7 @@
 #else
 typedef void *xpc_object_t;
 typedef void *xpc_type_t;
+typedef void *xpc_connection_t;
 extern const xpc_type_t _xpc_type_dictionary;
 #define XPC_TYPE_DICTIONARY _xpc_type_dictionary
 xpc_type_t xpc_get_type(xpc_object_t);
