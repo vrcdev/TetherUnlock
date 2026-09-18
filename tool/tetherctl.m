@@ -10,6 +10,7 @@ typedef void (^xpc_handler_t)(xpc_object_t);
 extern const xpc_type_t _xpc_type_dictionary;
 #define XPC_TYPE_DICTIONARY _xpc_type_dictionary
 xpc_connection_t xpc_connection_create_mach_service(const char *, dispatch_queue_t, uint64_t);
+xpc_connection_t xpc_connection_create(const char *, dispatch_queue_t);
 void xpc_connection_set_event_handler(xpc_connection_t, xpc_handler_t);
 void xpc_connection_resume(xpc_connection_t);
 void xpc_connection_send_message_with_reply(xpc_connection_t, xpc_object_t, dispatch_queue_t, xpc_handler_t);
@@ -18,6 +19,7 @@ void xpc_dictionary_set_uint64(xpc_object_t, const char *, uint64_t);
 void xpc_dictionary_set_int64(xpc_object_t, const char *, int64_t);
 void xpc_dictionary_set_bool(xpc_object_t, const char *, bool);
 void xpc_dictionary_set_string(xpc_object_t, const char *, const char *);
+void xpc_dictionary_set_connection(xpc_object_t, const char *, xpc_connection_t);
 xpc_type_t xpc_get_type(xpc_object_t);
 char *xpc_copy_description(xpc_object_t);
 #endif
@@ -67,10 +69,14 @@ static int send_cmd(xpc_connection_t c, uint64_t cmd, int nparams, char **params
 }
 
 /* usage: tetherctl <cmd> [k=v ...]            — single command
-   or:    tetherctl seq <cmd1> <cmd2> ...      — commands on one connection */
+   or:    tetherctl seq <cmd1> <cmd2> ...      — commands on one connection
+   or:    tetherctl link [k=v ...]             — create-client with a
+                                                clientCommunication push conn,
+                                                stay alive, print all pushes  */
 int main(int argc, char **argv) {
     @autoreleasepool {
         int seq = argc > 1 && !strcmp(argv[1], "seq");
+        int link = argc > 1 && !strcmp(argv[1], "link");
 
         xpc_connection_t c = xpc_connection_create_mach_service(
             "com.apple.MobileInternetSharing", NULL, 0);
@@ -83,6 +89,28 @@ int main(int argc, char **argv) {
         });
         xpc_connection_resume(c);
         usleep(200000);
+
+        if (link) {
+            /* anonymous peer connection handed to misd as the async channel */
+            xpc_connection_t comm = xpc_connection_create(NULL, NULL);
+            xpc_connection_set_event_handler(comm, ^(xpc_object_t e) {
+                dump(e, "comm-push");
+            });
+            xpc_connection_resume(comm);
+
+            xpc_object_t m = xpc_dictionary_create(NULL, NULL, 0);
+            xpc_dictionary_set_uint64(m, "xpcKey", 1000);
+            xpc_dictionary_set_connection(m, "clientCommunication", comm);
+            for (int i = 2; i < argc; i++)
+                set_param(m, argv[i]);
+
+            xpc_connection_send_message_with_reply(c, m, NULL, ^(xpc_object_t r) {
+                dump(r, "reply");
+            });
+            fprintf(stderr, "link up, listening for pushes...\n");
+            sleep(8);
+            return 0;
+        }
 
         if (seq) {
             for (int i = 2; i < argc; i++) {
