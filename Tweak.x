@@ -10,6 +10,10 @@
 #import <pthread.h>
 #import <ifaddrs.h>
 #import <net/if.h>
+#import <string.h>
+#if __arm64e__
+#include <ptrauth.h>
+#endif
 
 static void tu_log(const char *fmt, ...) {
     va_list ap; va_start(ap, fmt);
@@ -105,7 +109,13 @@ static int call_setTetheringActive(id inst, BOOL active) {
         }
     }
     if (!hdr) { tu_log("misd image not found in %u images", n); return -1; }
-    int (*imp)(id, SEL, BOOL) = (void *)(hdr + 0x1c128);
+    void *raw = (void *)(hdr + 0x1c128);
+#if __arm64e__
+    int (*imp)(id, SEL, BOOL) = (int (*)(id, SEL, BOOL))
+        ptrauth_sign_unauthenticated(raw, ptrauth_key_function_pointer, 0);
+#else
+    int (*imp)(id, SEL, BOOL) = raw;
+#endif
     return imp(inst, NULL, active);
 }
 
