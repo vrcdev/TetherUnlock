@@ -42,7 +42,7 @@ static void set_param(xpc_object_t m, char *arg) {
     char *v = eq + 1, *end;
     long long n = strtoll(v, &end, 0);
     if (*v && !*end) {
-        xpc_dictionary_set_int64(m, arg, n);
+        xpc_dictionary_set_uint64(m, arg, (uint64_t)n);
     } else if (!strcmp(v, "true")) {
         xpc_dictionary_set_bool(m, arg, true);
     } else {
