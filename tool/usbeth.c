@@ -5,9 +5,11 @@
  *   mach_msg(msgh_id=30050 add / 30051 remove?, body = NDR + {0,len} + name)
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <mach/mach.h>
 #include <mach/message.h>
+#include <servers/bootstrap.h>
 
 /* NDR_record_t + NDR_record come from mach/ndr.h via mach/mach.h */
 
