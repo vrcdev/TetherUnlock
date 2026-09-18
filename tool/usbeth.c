@@ -9,12 +9,7 @@
 #include <mach/mach.h>
 #include <mach/message.h>
 
-typedef struct {
-    unsigned char mig_vers, if_vers, reserved1, mig_encoding;
-    unsigned char int_rep, char_rep, float_rep, reserved2;
-} NDR_record_t;
-
-extern const NDR_record_t NDR_record;
+/* NDR_record_t + NDR_record come from mach/ndr.h via mach/mach.h */
 
 struct req {
     mach_msg_header_t hdr;   /* 24 bytes */
