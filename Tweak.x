@@ -27,6 +27,11 @@ static void force_status(void *status, const char *tag) {
 static id g_inst;   /* captured misCTClientSharedInstance */
 static int g_fired; /* activation already fired */
 
+@interface TUCTClient : NSObject
+- (void)activateTethering:(long)active;
+- (void)setTetheringActive:(long)active;
+@end
+
 %hook misCTClientSharedInstance
 
 - (void)getTetheringStatus:(void *)status :(id)arg {
@@ -89,10 +94,10 @@ static void *trigger_thread(void *arg) {
                     tu_log("trigger: forcing setTetheringActive(1) + activateTethering(1)");
                     @autoreleasepool {
                         @try {
-                            [g_inst setTetheringActive:1];
+                            [(TUCTClient *)g_inst setTetheringActive:1];
                         } @catch (id e) { tu_log("setTetheringActive threw"); }
                         @try {
-                            [g_inst activateTethering:1];
+                            [(TUCTClient *)g_inst activateTethering:1];
                         } @catch (id e) { tu_log("activateTethering threw"); }
                     }
                 } else {
