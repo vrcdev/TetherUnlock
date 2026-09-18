@@ -91,12 +91,12 @@ static int g_fired; /* activation already fired */
 
 %end
 
-/* misd's internal setTetheringActive IMP — file offset 0x1c128.
+/* misd's internal setTetheringActive IMP — VA 0x10001c128.
    Signature: int fn(id self, SEL _cmd, BOOL active)
    Requires ivar+8 (CTServerConnection) to be non-NULL. */
 static int call_setTetheringActive(id inst, BOOL active) {
-    intptr_t slide = _dyld_get_image_vmaddr_slide(0);
-    int (*imp)(id, SEL, BOOL) = (void *)(slide + 0x1c128);
+    const void *hdr = _dyld_get_image_header(0);
+    int (*imp)(id, SEL, BOOL) = (void *)((const char *)hdr + 0x1c128);
     return imp(inst, NULL, active);
 }
 
