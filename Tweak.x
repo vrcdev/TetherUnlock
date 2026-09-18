@@ -12,6 +12,8 @@
 #import <net/if.h>
 #import <string.h>
 #import <dlfcn.h>
+#import <objc/message.h>
+#import <objc/runtime.h>
 #if __arm64e__
 #include <ptrauth.h>
 #endif
@@ -139,10 +141,23 @@ static void *trigger_thread(void *arg) {
         if (stat("/var/mobile/tether_on", &st) == 0) {
             if (!g_fired) {
                 g_fired = 1;
-                if (g_inst) {
-                    tu_log("trigger: calling setTetheringActive IMP(%p, YES)", g_inst);
+                id inst = g_inst;
+                if (!inst) {
+                    /* grab the shared instance directly — IMP 0x10001bc24 */
+                    Class cls = objc_getClass("misCTClientSharedInstance");
+                    SEL sel = sel_registerName("sharedInstance");
+                    if (cls && sel) {
+                        inst = ((id (*)(id, SEL))objc_msgSend)((id)cls, sel);
+                        tu_log("trigger: sharedInstance -> %p", inst);
+                        if (inst) g_inst = inst;
+                    } else {
+                        tu_log("trigger: class/sel lookup failed (%p %p)", cls, sel);
+                    }
+                }
+                if (inst) {
+                    tu_log("trigger: calling setTetheringActive IMP(%p, YES)", inst);
                     @autoreleasepool {
-                        int r = call_setTetheringActive(g_inst, YES);
+                        int r = call_setTetheringActive(inst, YES);
                         tu_log("setTetheringActive IMP returned %d", r);
                         usleep(500000);
                         log_ifaddrs("after-active");
