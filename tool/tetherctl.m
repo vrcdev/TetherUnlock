@@ -20,6 +20,7 @@ void xpc_dictionary_set_int64(xpc_object_t, const char *, int64_t);
 void xpc_dictionary_set_bool(xpc_object_t, const char *, bool);
 void xpc_dictionary_set_string(xpc_object_t, const char *, const char *);
 void xpc_dictionary_set_connection(xpc_object_t, const char *, xpc_connection_t);
+const char *xpc_dictionary_get_string(xpc_object_t, const char *);
 xpc_type_t xpc_get_type(xpc_object_t);
 char *xpc_copy_description(xpc_object_t);
 #endif
@@ -101,12 +102,36 @@ int main(int argc, char **argv) {
             xpc_object_t m = xpc_dictionary_create(NULL, NULL, 0);
             xpc_dictionary_set_uint64(m, "xpcKey", 1000);
             xpc_dictionary_set_connection(m, "clientCommunication", comm);
-            for (int i = 2; i < argc; i++)
-                set_param(m, argv[i]);
 
+            __block char clientid[256] = {0};
+            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
             xpc_connection_send_message_with_reply(c, m, NULL, ^(xpc_object_t r) {
                 dump(r, "reply");
+                const char *cid = xpc_dictionary_get_string(r, "clientid");
+                if (cid) strncpy(clientid, cid, sizeof(clientid) - 1);
+                dispatch_semaphore_signal(sem);
             });
+            dispatch_time_t t = dispatch_time(DISPATCH_TIME_NOW, 6LL * NSEC_PER_SEC);
+            dispatch_semaphore_wait(sem, t);
+            fprintf(stderr, "clientid = %s\n", clientid[0] ? clientid : "(none)");
+
+            /* remaining args = follow-up commands, sent with the clientid */
+            for (int i = 2; i < argc; i++) {
+                uint64_t cmd = strtoull(argv[i], NULL, 0);
+                if (!cmd) continue;
+                fprintf(stderr, ">>> cmd %llu (clientid)\n", cmd);
+                xpc_object_t f = xpc_dictionary_create(NULL, NULL, 0);
+                xpc_dictionary_set_uint64(f, "xpcKey", cmd);
+                if (clientid[0])
+                    xpc_dictionary_set_string(f, "clientid", clientid);
+                /* optional k=v after the command, until the next bare number */
+                while (i + 1 < argc && strchr(argv[i + 1], '='))
+                    set_param(f, argv[++i]);
+                xpc_connection_send_message_with_reply(c, f, NULL, ^(xpc_object_t r) {
+                    dump(r, "reply");
+                });
+                usleep(300000);
+            }
             fprintf(stderr, "link up, listening for pushes...\n");
             sleep(8);
             return 0;
